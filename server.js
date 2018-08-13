@@ -1,3 +1,6 @@
+const YAML = require('yamljs');
+const fs = require('fs');
+
 // database is let instead of const to allow us to modify it in test.js
 let database = {
   users: {},
@@ -356,6 +359,24 @@ function upOrDownvoteComment(url, request) {
     response.body = { comment: database.comments[id] };
 
     return response;
+}
+
+function saveDatabase() {
+    let yamlString = YAML.stringify(database, 4);
+    
+    fs.writeFile("database.yml", yamlString, function (err) {
+        if (err) {
+            return console.log(err);
+        }
+    }); 
+}
+
+function loadDatabase() {
+    if (fs.existsSync('database.yml')) {
+        return YAML.load('database.yml');
+    } else {
+        return null;
+    }
 }
 
 // Write all code above this line.
