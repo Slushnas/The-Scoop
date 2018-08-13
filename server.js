@@ -2,6 +2,8 @@
 let database = {
   users: {},
   articles: {},
+  comments: {},
+  nextCommentId: 1,
   nextArticleId: 1
 };
 
@@ -26,6 +28,19 @@ const routes = {
   },
   '/articles/:id/downvote': {
     'PUT': downvoteArticle
+  },
+  '/comments': {
+    'POST': createComment
+  },
+  '/comments/:id': {
+    'PUT': updateComment,
+    'DELETE': deleteComment
+  },
+    '/comments/:id/upvote': {
+    'PUT': upOrDownvoteComment
+  },
+    '/comments/:id/downvote': {
+    'PUT': upOrDownvoteComment
   }
 };
 
@@ -238,6 +253,109 @@ function downvote(item, username) {
     item.downvotedBy.push(username);
   }
   return item;
+}
+
+function createComment(url, request) {
+    const requestComment = request.body && request.body.comment;
+    const response = {};
+
+    if (requestComment &&
+        requestComment.body &&
+        database.articles[requestComment.articleId] &&
+        database.users[requestComment.username]) {
+        const comment = {
+            id: database.nextCommentId++,
+            body: requestComment.body,
+            username: requestComment.username,
+            articleId: requestComment.articleId,
+            upvotedBy: [],
+            downvotedBy: []
+        };
+
+        database.comments[comment.id] = comment;
+        database.users[comment.username].commentIds.push(comment.id);
+        database.articles[comment.articleId].commentIds.push(comment.id);
+        response.body = { comment: comment };
+        response.status = 201;
+    } else {
+        response.status = 400;
+    }
+
+    return response;
+}
+
+function updateComment(url, request) {
+    const id = Number(url.split('/').filter(segment => segment)[1]);
+    const requestComment = request.body && request.body.comment;
+    const response = {};
+
+    if (!requestComment || requestComment.body === '' || !id) {
+        response.status = 400;
+        return response;
+    }
+
+    if (!database.comments[id]) {
+        response.status = 404;
+        return response;
+    }
+
+    database.comments[id].body = requestComment.body;
+    response.status = 200;
+    response.body = { comment: requestComment };
+
+    return response;
+}
+
+function deleteComment(url, request) {
+    const id = Number(url.split('/').filter(segment => segment)[1]);
+    const response = {};
+    if (!id || !database.comments[id]) {
+        response.status = 404;
+        return response;
+    }
+
+    // delete database.comments[id];
+    // Why is the Mocha test checking for null instead of undefined?
+    // "Deleting" this way will leave null entries in our database object...
+    database.comments[id] = null;
+    for (let user in database.users) {
+        database.users[user].commentIds = database.users[user].commentIds.filter(elem => elem !== id);
+    }
+    for (let article in database.articles) {
+        database.articles[article].commentIds = database.articles[article].commentIds.filter(elem => elem !== id);
+    }
+
+    response.status = 204;
+
+    return response;
+}
+
+// Combined function to avoid code duplication
+function upOrDownvoteComment(url, request) {
+    const id = Number(url.split('/').filter(segment => segment)[1]);
+    const upOrDownvote = url.split('/').filter(segment => segment)[2];
+
+    const requestUsername = request.body && request.body.username;
+    const response = {};
+
+    if (!id || !requestUsername || !database.comments[id] || !database.users[requestUsername]) {
+        response.status = 400;
+        return response;
+    }
+
+    if (upOrDownvote === 'upvote') {
+        upvote(database.comments[id], requestUsername);
+    } else if (upOrDownvote === 'downvote') {
+        downvote(database.comments[id], requestUsername);
+    } else { // Extra check just to make sure our route didn't send us something unexpected
+        resposne.status = 400;
+        return response;
+    }
+
+    response.status = 200;
+    response.body = { comment: database.comments[id] };
+
+    return response;
 }
 
 // Write all code above this line.
